@@ -1,0 +1,4 @@
+ in the script: src/abstract_pdfs/SliceManager.py
+ dubbed with the title: SliceManager_Class_Description
+ was described as: The provided script creates a SliceManager class as part of the 'abstract_pdfs' Python package. This class manages operations for Optical Character Recognition (OCR) on PDF files, focusing specifically on column-aware OCR and text cleaning. The SliceManager class uses different OCR engines, including Tesseract, EasyOCR, and PaddleOCR, with each engine having its own output directory and collated results. The SliceManager class initiation takes a PDF file path, an output root, and the OCR engines to be used as inputs. The class provides methods to convert a single PDF page to PNG, perform OCR and text cleaning on an image, process a single PDF page for a single OCR engine, and run a full pipeline for a specific OCR engine. It also provides a method to run the entire PDF through all configured OCR engines.
+
