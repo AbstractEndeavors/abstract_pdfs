@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 setuptools.setup(
     name='abstract_pdfs',
-    version='0.0.2',
+    version='0.0.3',
     author='putkoff',
     author_email='partners@abstractendeavors.com',
     description='A modular OCR and PDF-processing toolkit for automated text extraction, deduplication, and multi-engine column-aware OCR using Tesseract, EasyOCR, and PaddleOCR',

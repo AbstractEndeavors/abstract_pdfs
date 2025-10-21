@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: abstract_pdfs
-Version: 0.0.2
+Version: 0.0.3
 Summary: A modular OCR and PDF-processing toolkit for automated text extraction, deduplication, and multi-engine column-aware OCR using Tesseract, EasyOCR, and PaddleOCR
 Home-page: https://github.com/AbstractEndeavors/abstract_pdfs
 Author: putkoff
