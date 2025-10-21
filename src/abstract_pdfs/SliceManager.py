@@ -31,7 +31,9 @@ class SliceManager:
     """Column-aware OCR and text cleaner using multiple engines."""
 
     def __init__(self, pdf_path: str, out_root: str = None,
-                 engines='paddle', engine_directory=False, visualize=False):
+                 engines='paddle',
+                 engine_directory=False,
+                 visualize=False):
         self.pdf_path = pdf_path
         self.out_root = out_root or get_pdf_dir_or_path(pdf_path)
         self.file_parts = get_file_parts(self.pdf_path)
