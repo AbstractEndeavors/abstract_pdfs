@@ -6,16 +6,18 @@ class SliceManager:
     Each engine gets its own output tree and collated results.
     """
 
-    def __init__(self, pdf_path: str, out_root: str,engines='paddle'):
+    def __init__(self, pdf_path: str, out_root: str,engines='paddle',engine_directory=False,visualize=False):
         self.pdf_path = pdf_path
         self.out_root = out_root
         self.file_parts = get_file_parts(self.pdf_path)
         self.filename = self.file_parts.get("filename")
         self.base = os.path.join(self.out_root, self.filename)
-        
+        self.visualize=visualize
+        self.engine_directory = engine_directory
         # Engines to run
         self.engines = make_list(engines or Config.OCR_ENGINES)
-
+        if len(self.engines) >1:
+            self.engine_directory=True
         # Create global directories
         self.pages = make_dir(self.base, "pages")
         self.images = make_dir(self.base, "images")
@@ -24,7 +26,9 @@ class SliceManager:
         # Create separate per-engine trees
         self.engine_dirs = {}
         for engine in self.engines:
-            root = make_dir(self.base, engine)
+            root = make_dir(self.base)
+            if self.engine_directory:
+                root = make_dir(self.base, engine)
             dirs = {
                 "root": root,
                 "raw_tx": make_dir(root, "text"),
@@ -99,8 +103,7 @@ class SliceManager:
                 return "", ""
 
             div, _ = detect_columns(img_path)
-            two = validate_reading_order(img_path, div)
-            visualize_columns(img_path, div)
+            two = validate_reading_order(img_path, div,visualize=self.visualize)
             if two:
                 logger.info(f"📗 [{engine}] Page {i}: Split detected — processing left/right halves.")
                 left, right = slice_columns(img_path, div, self.cols, f"page_{i}")
