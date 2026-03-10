@@ -1,20 +1,20 @@
 {
-    "module_info_dir": "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/module_info",
-    "descriptions_dir": "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/module_info/descriptions",
-    "info_file_path": "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/module_info/descriptions/module_info.json",
-    "read_me_response_path": "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/module_info/read_me_response.json",
-    "module_directory": "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs",
+    "module_info_dir": "/home/op/Documents/python/modules/src/modules/abstract_pdfs/module_info",
+    "descriptions_dir": "/home/op/Documents/python/modules/src/modules/abstract_pdfs/module_info/descriptions",
+    "info_file_path": "/home/op/Documents/python/modules/src/modules/abstract_pdfs/module_info/descriptions/module_info.json",
+    "read_me_response_path": "/home/op/Documents/python/modules/src/modules/abstract_pdfs/module_info/read_me_response.json",
+    "module_directory": "/home/op/Documents/python/modules/src/modules/abstract_pdfs",
     "module_paths": [
-        "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/src/abstract_pdfs/AbstractPDFManager.py",
-        "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/src/abstract_pdfs/SliceManager.py",
-        "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/src/abstract_pdfs/__init__.py",
-        "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/src/abstract_pdfs/imports/__init__.py",
-        "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/src/abstract_pdfs/imports/imports.py",
-        "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/src/abstract_pdfs/imports/manifest_utils.py",
-        "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/src/abstract_pdfs/pdf_utils/__init__.py",
-        "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/src/abstract_pdfs/pdf_utils/imports.py",
-        "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/src/abstract_pdfs/pdf_utils/pdf_to_text.py",
-        "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/src/abstract_pdfs/pdf_utils/pdf_tools.py"
+        "/home/op/Documents/python/modules/src/modules/abstract_pdfs/src/abstract_pdfs/AbstractPDFManager.py",
+        "/home/op/Documents/python/modules/src/modules/abstract_pdfs/src/abstract_pdfs/SliceManager.py",
+        "/home/op/Documents/python/modules/src/modules/abstract_pdfs/src/abstract_pdfs/__init__.py",
+        "/home/op/Documents/python/modules/src/modules/abstract_pdfs/src/abstract_pdfs/imports/__init__.py",
+        "/home/op/Documents/python/modules/src/modules/abstract_pdfs/src/abstract_pdfs/imports/imports.py",
+        "/home/op/Documents/python/modules/src/modules/abstract_pdfs/src/abstract_pdfs/imports/manifest_utils.py",
+        "/home/op/Documents/python/modules/src/modules/abstract_pdfs/src/abstract_pdfs/pdf_utils/__init__.py",
+        "/home/op/Documents/python/modules/src/modules/abstract_pdfs/src/abstract_pdfs/pdf_utils/imports.py",
+        "/home/op/Documents/python/modules/src/modules/abstract_pdfs/src/abstract_pdfs/pdf_utils/pdf_to_text.py",
+        "/home/op/Documents/python/modules/src/modules/abstract_pdfs/src/abstract_pdfs/pdf_utils/pdf_tools.py"
     ],
     "Imports": [
         "",
@@ -28,10 +28,10 @@
     ],
     "meta_data": {
         "name": "abstract_pdfs",
-        "version": "0.0.0.001",
+        "version": "0.0.4",
         "author": "putkoff",
         "author_email": "partners@abstractendeavors.com",
-        "description": "abstract_pdfs",
+        "description": "A modular OCR and PDF-processing toolkit for automated text extraction, deduplication, and multi-engine column-aware OCR using Tesseract, EasyOCR, and PaddleOCR",
         "long_description": "",
         "long_description_content_type": "text/markdown",
         "url": "https://github.com/AbstractEndeavors/abstract_pdfs",
@@ -50,15 +50,15 @@
             "": "src"
         },
         "packages": [
+            "imports",
             "ast_analyzer",
             "module_datas",
-            "imports",
-            "ast_analyzer.src",
-            "module_datas.src",
-            "imports.functions",
-            "imports.managers",
             "imports.constants",
-            "imports.constants.prompts"
+            "imports.managers",
+            "imports.functions",
+            "imports.constants.prompts",
+            "ast_analyzer.src",
+            "module_datas.src"
         ],
         "python_requires": ">=3.6"
     },
@@ -75,7 +75,7 @@
         "src/abstract_pdfs/pdf_utils/pdf_tools.py"
     ],
     "content_synopsis": {
-        "complete_synopsis": "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/module_info/descriptions/complete_synopsis.txt",
+        "complete_synopsis": "/home/op/Documents/python/modules/src/modules/abstract_pdfs/module_info/descriptions/complete_synopsis.txt",
         "src/abstract_pdfs/AbstractPDFManager.py": "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/module_info/abstract_pdfs/AbstractPDFManager/synopsis.txt",
         "src/abstract_pdfs/SliceManager.py": "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/module_info/abstract_pdfs/SliceManager/synopsis.txt",
         "src/abstract_pdfs/__init__.py": "/home/computron/Documents/pythonTools/modules/src/modules/abstract_pdfs/module_info/abstract_pdfs/__init__/synopsis.txt",

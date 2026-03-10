@@ -1,0 +1,312 @@
+from .imports import *
+from .probers import (
+    keywords_from_text,
+    probe_image
+    )
+# ─────────────────────────────────────────────────────────────────────────────
+# Generators
+# ─────────────────────────────────────────────────────────────────────────────
+def get_dict(obj):
+    if not isinstance(obj,dict):
+        try:
+            obj = obj.to_dict()
+        except Exception as e:
+            logger.info(f"ERROR in generators.py via {obj}: {e}")
+    return obj
+def generate_image_info(
+    img_path: Path,
+    info_path:Path,
+    description:str=None,
+    alt:str=None,
+    caption:str=None,
+    longdesc:str = None,
+    keywords:str = None,
+    social:str = None,
+    title:str = None,
+    schema:str = None,
+    base_url:str=None,
+    media_root:str=None
+) -> ImageInfoJson:
+    """
+    Build a fully-populated ImageInfoJson from an image file.
+
+    media_root is the directory that maps to the URL root — e.g. /srv/media/ba
+    so that /srv/media/ba/imgs/cannabis/x.webp → /imgs/cannabis/x.webp → URL.
+    """
+    base_url=base_url or ROOT_URL
+    media_root = media_root or MEDIA_ROOT_DIR 
+    w, h, size_mb = probe_image(img_path)
+    stem     = img_path.stem
+    ext      = img_path.suffix
+    media_root = makePath(media_root)
+    # Compute URL path relative to media_root.
+    # Walk up ancestors until we find one that is media_root, or fall back to
+    # just the filename so the tool never crashes on unexpected layouts.
+    try:
+        rel         = img_path.relative_to(media_root)
+        public_path = "/" + str(rel).replace("\\", "/")
+        dir_rel     = img_path.parent.relative_to(media_root)
+        dir_path    = "/" + str(dir_rel).replace("\\", "/").lstrip("/")
+    except ValueError:
+        # img_path is not under media_root — use the bare filename and warn
+        print(
+            f"  WARNING: {img_path} is not under media-root {media_root}.\n"
+            f"           URL paths will only contain the filename. "
+            f"Pass --media-root correctly to fix this.",
+            file=sys.stderr,
+        )
+        public_path = "/" + img_path.name
+        dir_path    = "/"
+
+    public_url = base_url.rstrip("/") + public_path
+    page_url   = base_url.rstrip("/") + dir_path
+
+    schema = schema or ImageSchema(
+        name         = stem,
+        description  = description or f"Image: {stem}",
+        url          = page_url,
+        content_url  = public_url,
+        width        = w,
+        height       = h,
+    )
+    social = social or SocialMeta(
+        og_image      = public_url,
+        og_image_alt  = alt or description or caption or stem,
+        twitter_image = public_url,
+    )
+
+    return ImageInfoJson(
+        page_url     = page_url,
+        alt          = alt or stem.replace("-", " ").replace("_", " "),
+        caption      = caption or stem.replace("-", " ").replace("_", " ").title(),
+        keywords_str = ",".join(w.capitalize() for w in (keywords or stem).replace("-", " ").replace("_", " ").split()[:8]),
+        filename     = stem,
+        ext          = ext,
+        title        = title or stem.replace("-", " ").replace("_", " ").title(),
+        dimensions   = {"width": w, "height": h},
+        file_size    = size_mb,
+        schema       = get_dict(schema),
+        social_meta  = get_dict(social),
+    )
+
+def makePath(path):
+    if isinstance(path,str):
+        path = Path(path)
+    return path
+def generate_pdf_page_manifest(
+    filename,
+    page_num,
+    text_dir,
+    thumb_dir,
+    pdf_dir,
+    pdf_path=None,
+    image=True,
+    media_root=None,
+    base_url=None,
+    pdfs_public_url=None
+    ):
+        base_url=base_url or ROOT_URL
+        media_root = media_root or MEDIA_ROOT_DIR 
+        pdfs_public_url = pdfs_public_url  or PDFS_ROOT_DIR
+        page_str = f"page_{page_num:03d}"
+        page_tag = f"{filename}_{page_str}"
+        
+        # Text
+        longdesc = ""
+        txt_file = makePath(text_dir) / f"{page_tag}.txt"
+        if txt_file.exists():
+            longdesc = txt_file.read_text(encoding="utf-8", errors="replace").strip()
+        elif HAS_FITZ:
+            if not pdf_path:
+                pdf_path = os.path.join(str(pdf_dir),filename)
+            doc = fitz.open(str(pdf_path))
+            longdesc = doc[page_num-1].get_text("text").strip()
+
+        keywords = keywords_from_text(longdesc) if longdesc else ""
+
+        # Dimensions
+        w, h = 0, 0
+        if HAS_FITZ:
+            if not pdf_path:
+                pdf_path = os.path.join(str(pdf_dir),filename)
+            doc = fitz.open(str(pdf_path))
+            rect = doc[page_num-1].rect
+            w, h = int(rect.width), int(rect.height)
+
+        # Thumbnail
+        thumb_page_path = makePath(thumb_dir) / page_str
+        thumb_path = thumb_page_path / f"{page_tag}.png"
+        info_path = thumb_page_path / f"info.json"
+        thumb_abs  = str(thumb_path)
+        try:
+            rel_thumb = thumb_path.relative_to(media_root)
+            thumb_url = base_url.rstrip("/") + "/" + str(rel_thumb).replace("\\", "/")
+        except ValueError:
+            thumb_url = base_url.rstrip("/") + f"/pdfs/{filename}/thumbnails/{page_tag}.png"
+
+        social = SocialMeta(
+            og_image      = thumb_url,
+            og_image_alt  = thumb_url,
+            twitter_image = thumb_url,
+        )
+        alt = f"{page_tag} | page {page_num} | {pdfs_public_url}"
+        caption = f"{filename}.pdf page {page_num}"
+        title = f"{filename}.pdf_page_{page_num}"
+        schema = {"name": page_tag, "url": pdfs_public_url}
+        entry = PdfPageManifestEntry(
+            alt          = alt,
+            caption      = caption,
+            keywords_str = keywords,
+            filename     = page_tag,
+            ext          = ".png",
+            title        = title,
+            dimensions   = {"width": w, "height": h},
+            file_size    = round(thumb_path.stat().st_size / 1_048_576, 3) if thumb_path.exists() else 0.0,
+            longdesc     = longdesc,
+            schema       = schema,
+            social_meta  = social.to_dict(),
+            text_path    = str(txt_file),
+            image_path   = thumb_abs,
+        )
+        if image:
+            image_info = generate_image_info(
+                thumb_path,
+                info_path,
+                longdesc,
+                alt,
+                caption,
+                longdesc,
+                keywords,
+                social,
+                title,
+                schema,
+                base_url,
+                media_root
+                )
+
+            safe_dump_to_json(
+                file_path=info_path,
+                data=get_dict(image_info)
+                )
+        return entry
+def generate_pdf_manifest(
+    pdf_path: Path,
+    text_root: Path | None = None,
+    thumb_root: Path | None = None,
+    base_url: str | None = None,
+    media_root: Path | None = None,
+    pdfs_public_url: Path | None = None
+) -> list[PdfPageManifestEntry]:
+    """
+    Build a manifest entry per PDF page.
+
+    media_root: the volume root that maps to URL / (e.g. /srv/media/ba)
+    text_root:  directory containing {base}_page_NNN.txt files
+    thumb_root: directory containing {base}_page_NNN.png thumbnails
+
+    Both default to {pdf_dir}/text/ and {pdf_dir}/thumbnails/ respectively.
+    """
+    base_url=base_url or ROOT_URL
+    media_root = media_root or MEDIA_ROOT_DIR 
+    pdfs_public_url = pdfs_public_url  or PDFS_ROOT_DIR
+    if not HAS_FITZ:
+        print("  ⚠  PyMuPDF (fitz) not installed — page text/dimensions will be empty.")
+        print("     pip install pymupdf")
+    pdf_path = makePath(pdf_path)
+    filename     = pdf_path.stem
+    pdf_dir  = pdf_path.parent
+    text_dir  = text_root  or (pdf_dir / "text")
+    thumb_dir = thumb_root or (pdf_dir / "thumbnails")
+
+    try:
+        rel = pdf_path.relative_to(media_root)
+        pdfs_public_url = base_url.rstrip("/") + "/" + str(rel).replace("\\", "/")
+    except ValueError:
+        pdfs_public_url = base_url.rstrip("/") + "/" + pdf_path.name
+
+    entries: list[PdfPageManifestEntry] = []
+
+    if HAS_FITZ:
+        doc = fitz.open(str(pdf_path))
+        page_count = doc.page_count
+    else:
+        page_count = _count_pdf_pages_fallback(pdf_path)
+
+    for i in range(page_count):
+        page_num = i + 1
+        entry = generate_pdf_page_manifest(
+            filename,
+            page_num,
+            text_dir,
+            thumb_dir,
+            pdf_dir,
+            pdf_path,
+            image=True,
+            media_root=media_root,
+            base_url=base_url,
+            pdfs_public_url=pdfs_public_url
+            )
+        entries.append(entry)
+    if HAS_FITZ:
+        doc.close()
+
+    return entries
+
+
+def _normalize_thumbnail(value: str) -> str:
+    """
+    Strip leading slash and redundant 'public/' prefix.
+    Canonical form is always relative to public/ root: 'imgs/section/name'.
+    Storing 'public/imgs/...' causes a double-public error at build time because
+    resolveThumbnailInfoJson prepends PUBLIC_ROOT (which already ends in /public).
+    """
+    v = value.lstrip("/")
+    if v.startswith("public/"):
+        v = v[len("public/"):]
+    return v
+
+
+def generate_page_variables(
+    section:     str,
+    slug:        str,
+    title:       str,
+    description: str,
+    thumbnail:   str,
+    base_url:    str,
+    keywords:    str = "",
+    content_file: str = "",
+) -> VariablesJson:
+    """Build a VariablesJson for a new page."""
+    clean_base       = base_url.rstrip("/")
+    href             = f"/{section}/{slug}"
+    share_url        = f"{clean_base}/{section}/{slug}"
+    cf               = content_file or f"contents/{section}/{slug}.md"
+    thumb_normalized = _normalize_thumbnail(thumbnail)
+    thumb_link       = f"{clean_base}/{thumb_normalized}/{slug}_resized.webp"
+
+    return VariablesJson(
+        BASE_URL     = clean_base,
+        href         = href,
+        title        = title,
+        content_file = cf,
+        description  = description,
+        share_url    = share_url,
+        keywords_str = keywords or slug.replace("-", ", "),
+        thumbnail    = thumb_normalized,   # never store public/ prefix
+        thumbnail_alt     = f"{title} thumbnail",
+        thumbnail_caption = f"Thumbnail image for {title}",
+        thumbnail_keywords_str = keywords or slug.replace("-", ", "),
+        thumbnail_link    = thumb_link,
+    )
+
+
+def _count_pdf_pages_fallback(pdf_path: Path) -> int:
+    """Count PDF pages without PyMuPDF by scanning raw bytes for /Page markers."""
+    try:
+        data = pdf_path.read_bytes()
+        return len(re.findall(rb'/Type\s*/Page[^s]', data))
+    except Exception:
+        return 0
+
+
+

@@ -1,6 +1,6 @@
 from .imports import *
 from .pdf_utils import pdf_tools, pdf_to_text
-from .SliceManager import SliceManager
+from .pipeline import SliceManager
 
 class AbstractPDFManager:
     """
@@ -22,9 +22,9 @@ class AbstractPDFManager:
         self.pdf_path = get_pdf_path(pdf_path)
         if not self.pdf_path:
             raise FileNotFoundError(f"❌ Could not locate valid PDF in {pdf_path}")
-
-        self.pdf_dir = get_pdf_dir(pdf_path)
         self.file_parts = get_file_parts(self.pdf_path)
+        self.pdf_dir = self.file_parts.get("dirname")
+        
         self.filename = self.file_parts.get("filename")
         self.dirname = self.file_parts.get("dirname")
         self.out_root = out_root or os.path.join(self.dirname, f"{self.filename}_output")
