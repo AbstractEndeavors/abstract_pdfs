@@ -3,6 +3,7 @@ from .probers import (
     keywords_from_text,
     probe_image
     )
+from abstract_hugpy import *
 # ─────────────────────────────────────────────────────────────────────────────
 # Generators
 # ─────────────────────────────────────────────────────────────────────────────
@@ -13,6 +14,12 @@ def get_dict(obj):
         except Exception as e:
             logger.info(f"ERROR in generators.py via {obj}: {e}")
     return obj
+def get_page_num(i):
+    i+=1
+    return f"{i:03d}"
+def get_page_str(i):
+    page_num = get_page_num(i)
+    return f"page_{page_num}"
 def generate_image_info(
     img_path: Path,
     info_path:Path,
@@ -60,7 +67,7 @@ def generate_image_info(
 
     public_url = base_url.rstrip("/") + public_path
     page_url   = base_url.rstrip("/") + dir_path
-
+    input(description)
     schema = schema or ImageSchema(
         name         = stem,
         description  = description or f"Image: {stem}",
@@ -95,7 +102,7 @@ def makePath(path):
     return path
 def generate_pdf_page_manifest(
     filename,
-    page_num,
+    page_i,
     text_dir,
     thumb_dir,
     pdf_dir,
@@ -105,11 +112,14 @@ def generate_pdf_page_manifest(
     base_url=None,
     pdfs_public_url=None
     ):
+        page_num = get_page_num(page_i)
+        page_str = get_page_str(page_i)
+        page_tag = f"{filename}_{page_str}"
         base_url=base_url or ROOT_URL
         media_root = media_root or MEDIA_ROOT_DIR 
         pdfs_public_url = pdfs_public_url  or PDFS_ROOT_DIR
-        page_str = f"page_{page_num:03d}"
-        page_tag = f"{filename}_{page_str}"
+    
+        
         
         # Text
         longdesc = ""
@@ -120,7 +130,7 @@ def generate_pdf_page_manifest(
             if not pdf_path:
                 pdf_path = os.path.join(str(pdf_dir),filename)
             doc = fitz.open(str(pdf_path))
-            longdesc = doc[page_num-1].get_text("text").strip()
+            longdesc = doc[page_i].get_text("text").strip()
 
         keywords = keywords_from_text(longdesc) if longdesc else ""
 
@@ -130,7 +140,7 @@ def generate_pdf_page_manifest(
             if not pdf_path:
                 pdf_path = os.path.join(str(pdf_dir),filename)
             doc = fitz.open(str(pdf_path))
-            rect = doc[page_num-1].rect
+            rect = doc[page_i].rect
             w, h = int(rect.width), int(rect.height)
 
         # Thumbnail
@@ -168,6 +178,7 @@ def generate_pdf_page_manifest(
             text_path    = str(txt_file),
             image_path   = thumb_abs,
         )
+        
         if image:
             image_info = generate_image_info(
                 thumb_path,
@@ -183,11 +194,14 @@ def generate_pdf_page_manifest(
                 base_url,
                 media_root
                 )
-
+##            input(longdesc)
+##            print(info_path)
+##            input(get_dict(image_info))
             safe_dump_to_json(
                 file_path=info_path,
                 data=get_dict(image_info)
                 )
+            
         return entry
 def generate_pdf_manifest(
     pdf_path: Path,
@@ -217,7 +231,7 @@ def generate_pdf_manifest(
     pdf_dir  = pdf_path.parent
     text_dir  = text_root  or (pdf_dir / "text")
     thumb_dir = thumb_root or (pdf_dir / "thumbnails")
-
+    
     try:
         rel = pdf_path.relative_to(media_root)
         pdfs_public_url = base_url.rstrip("/") + "/" + str(rel).replace("\\", "/")
@@ -231,12 +245,14 @@ def generate_pdf_manifest(
         page_count = doc.page_count
     else:
         page_count = _count_pdf_pages_fallback(pdf_path)
-
-    for i in range(page_count):
-        page_num = i + 1
+    
+    for page_i in range(page_count):
+        page_num = get_page_num(page_i)
+        page_str = get_page_str(page_i)
+        page_tag = f"{filename}_{page_str}"
         entry = generate_pdf_page_manifest(
             filename,
-            page_num,
+            page_i ,
             text_dir,
             thumb_dir,
             pdf_dir,
@@ -247,6 +263,7 @@ def generate_pdf_manifest(
             pdfs_public_url=pdfs_public_url
             )
         entries.append(entry)
+##        input(entry)
     if HAS_FITZ:
         doc.close()
 
