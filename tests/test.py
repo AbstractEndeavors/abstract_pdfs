@@ -1,7 +1,8 @@
 from imports import *
-##pdf_path = "/srv/media/thedailydialectics/pdfs/cancer/cannabis/test-cancer/test-cancer.pdf"
-##
-##generate_pdf_manifest(pdf_path = pdf_path,
+pdf_path = "/srv/media/thedailydialectics/pdfs/cancer/cannabis/test-cancer/test-cancer.pdf"
+pline = DocumentPipeline(pdf_path)
+pline.run()
+#generate_pdf_manifest(pdf_path = pdf_path,
 ##base_url=ROOT_URL,
 ##media_root=MEDIA_ROOT_DIR,
 ##pdfs_public_url=PDFS_PUBLIC_URL)

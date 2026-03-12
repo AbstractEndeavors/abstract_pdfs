@@ -67,7 +67,6 @@ def generate_image_info(
 
     public_url = base_url.rstrip("/") + public_path
     page_url   = base_url.rstrip("/") + dir_path
-    input(description)
     schema = schema or ImageSchema(
         name         = stem,
         description  = description or f"Image: {stem}",
@@ -263,7 +262,6 @@ def generate_pdf_manifest(
             pdfs_public_url=pdfs_public_url
             )
         entries.append(entry)
-##        input(entry)
     if HAS_FITZ:
         doc.close()
 
