@@ -5,16 +5,27 @@ from .SliceManager       import SliceManager
 
 class DocumentPipeline:
 
-    def __init__(self, pdf_path: str):
+    def __init__(self,
+                 pdf_path: str,
+                 base_dir=None,
+                 out_root=None,
+                 engines=None,
+                 engine_directory=None,
+                 visualize=None,
+                 root_url=None,
+                 media_root=None,
+                 pdfs_public_url=None
+                 ):
         self.file_parts = normalize_pdf_path(pdf_path)
         self.pdf_path   = self.file_parts.get("file_path")
-        self.base_dir,self.out_root   = self.file_parts.get("dirname")
-        self.engines    = ["layout_ocr"]
-        self.engine_directory:bool= False,
-        self.visualize:bool = None,
-        self.root_url= None,
-        self.media_root= None,
-        self.pdfs_public_url= None
+        self.base_dir   = self.file_parts.get("dirname")
+        self.out_root = out_root or self.base_dir
+        self.engines    = engines or ["layout_ocr"]
+        self.engine_directory = engine_directory or False,
+        self.visualize= visualize,
+        self.root_url= root_url,
+        self.media_root= media_root,
+        self.pdfs_public_url= pdfs_public_url
     def run(self) -> Path:
         print("📂 normalised directory:", self.base_dir)
 
