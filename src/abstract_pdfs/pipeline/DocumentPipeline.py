@@ -8,14 +8,28 @@ class DocumentPipeline:
     def __init__(self, pdf_path: str):
         self.file_parts = normalize_pdf_path(pdf_path)
         self.pdf_path   = self.file_parts.get("file_path")
-        self.base_dir   = self.file_parts.get("dirname")
-
+        self.base_dir,self.out_root   = self.file_parts.get("dirname")
+        self.engines    = ["layout_ocr"]
+        self.engine_directory:bool= False,
+        self.visualize:bool = None,
+        self.root_url= None,
+        self.media_root= None,
+        self.pdfs_public_url= None
     def run(self) -> Path:
         print("📂 normalised directory:", self.base_dir)
 
         # OCR
-        slice_mgr       = SliceManager(self.pdf_path)
-        self.file_parts = slice_mgr.process_pdf()
+        slice_mgr = SliceManager(
+            pdf_path=self.pdf_path,
+            out_root=self.out_root,
+            engines=self.engines,
+            engine_directory=self.engine_directory,
+            visualize=self.visualize,
+            root_url=self.root_url,
+            media_root=self.media_root,
+            pdfs_public_url=self.pdfs_public_url
+            )
+        self.file_parts = slice_mgr.process_pdf(self.engines)
         self.pdf_path   = self.file_parts.get("file_path")
         self.base_dir   = self.file_parts.get("dirname")
         self.dirbase    = self.file_parts.get("dirbase")
