@@ -1,4 +1,5 @@
 from .imports import *
+
 # ---------------------------------------------------------------------------
 # Path helpers — one place, used by both standalone functions and SliceManager
 # ---------------------------------------------------------------------------
@@ -20,23 +21,208 @@ def get_image_text_path(i: int, pdf_path: str, base_dir: str = None) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Failure registry — disk-backed, survives restarts
+# ---------------------------------------------------------------------------
+
+class PageFailure(TypedDict):
+    page:      int
+    strategy:  str        # last strategy attempted
+    error:     str        # exception message
+    timestamp: str        # ISO-8601
+
+
+class FailureRegistry:
+    """
+    Tracks pages that failed all extraction strategies so the repair loop
+    doesn't retry them every invocation.
+
+    Backed by a JSON file next to the output tree.  Keyed by page number.
+    """
+
+    def __init__(self, base_dir: str):
+        self._path = os.path.join(base_dir, "failures.json")
+        self._data: Dict[str, PageFailure] = self._load()
+
+    # -- persistence --
+
+    def _load(self) -> Dict[str, PageFailure]:
+        if not os.path.isfile(self._path):
+            return {}
+        try:
+            with open(self._path, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}
+
+    def _flush(self) -> None:
+        tmp = self._path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(self._data, f, indent=2)
+        os.replace(tmp, self._path)
+
+    # -- public API --
+
+    def record(self, page: int, strategy: str, error: Exception) -> None:
+        self._data[str(page)] = PageFailure(
+            page=page,
+            strategy=strategy,
+            error=str(error),
+            timestamp=datetime.utcnow().isoformat(),
+        )
+        self._flush()
+
+    def is_failed(self, page: int) -> bool:
+        return str(page) in self._data
+
+    def failed_pages(self) -> List[int]:
+        return sorted(int(k) for k in self._data)
+
+    def clear_page(self, page: int) -> None:
+        self._data.pop(str(page), None)
+        self._flush()
+
+    def clear_all(self) -> None:
+        self._data.clear()
+        self._flush()
+
+    def summary(self) -> Dict[str, PageFailure]:
+        return dict(self._data)
+
+
+# ---------------------------------------------------------------------------
+# Image extraction strategies — explicit ordered fallback chain
+# ---------------------------------------------------------------------------
+
+def _extract_via_pdf2image_direct(
+    pdf_path: str, page_num: int, img_path: str
+) -> Optional[str]:
+    """
+    Render page image directly from the source PDF via pdf2image/Poppler.
+    Bypasses PyPDF2's object graph entirely — no recursion risk.
+    """
+    from pdf2image import convert_from_path
+
+    images = convert_from_path(
+        pdf_path,
+        first_page=page_num,
+        last_page=page_num,
+        dpi=200,
+    )
+    if not images:
+        return None
+
+    images[0].save(img_path, "PNG")
+    return img_path
+
+
+def _extract_via_pymupdf(
+    pdf_path: str, page_num: int, img_path: str
+) -> Optional[str]:
+    """
+    Render via PyMuPDF (fitz).  Independent PDF parser — handles files
+    that choke both PyPDF2 and Poppler.
+    """
+    import fitz
+
+    doc  = fitz.open(pdf_path)
+    page = doc[page_num - 1]             # 0-indexed
+    pix  = page.get_pixmap(dpi=200)
+    pix.save(img_path)
+    doc.close()
+    return img_path
+
+
+def _extract_via_pypdf2_buffer(
+    page, page_num: int, img_path: str
+) -> Optional[str]:
+    """
+    Original strategy: serialize single page via PyPDF2 writer, render
+    with pdf2image.  Kept as last resort — known to hit recursion depth
+    errors on certain PDFs.
+    """
+    import io
+    from pdf2image import convert_from_bytes
+
+    buf    = io.BytesIO()
+    writer = PyPDF2.PdfWriter()
+    writer.add_page(page)
+    writer.write(buf)
+
+    images = convert_from_bytes(buf.getvalue())
+    if not images:
+        return None
+
+    images[0].save(img_path, "PNG")
+    return img_path
+
+
+# Registry of strategies in attempted order.
+# Each entry: (name, callable, requires_page_object)
+#   - name:                  logged on failure / stored in failure registry
+#   - callable:              the extractor function
+#   - requires_page_object:  True → pass (page, page_num, img_path)
+#                            False → pass (pdf_path, page_num, img_path)
+
+ImageStrategy = Tuple[str, Callable, bool]
+
+DEFAULT_IMAGE_STRATEGIES: List[ImageStrategy] = [
+    ("pdf2image_direct", _extract_via_pdf2image_direct, False),
+    ("pymupdf",          _extract_via_pymupdf,          False),
+    ("pypdf2_buffer",    _extract_via_pypdf2_buffer,    True),
+]
+
+
+def extract_page_image_with_fallbacks(
+    pdf_path:   str,
+    page,                           # PyPDF2 page object (only used by legacy strategy)
+    page_num:   int,
+    img_path:   str,
+    strategies: List[ImageStrategy] = None,
+    failures:   FailureRegistry     = None,
+) -> Optional[str]:
+    """
+    Walk the strategy chain.  Return path on first success, None if all fail.
+    Records terminal failure in the registry when every strategy is exhausted.
+    """
+    if os.path.exists(img_path):
+        return img_path
+
+    strategies = strategies or DEFAULT_IMAGE_STRATEGIES
+    last_error: Optional[Exception] = None
+    last_name:  str = ""
+
+    for name, fn, needs_page in strategies:
+        try:
+            if needs_page:
+                result = fn(page, page_num, img_path)
+            else:
+                result = fn(pdf_path, page_num, img_path)
+
+            if result:
+                logger.info(f"[{name}] page {page_num:03d} — image extracted")
+                return result
+
+        except Exception as exc:
+            last_error = exc
+            last_name  = name
+            logger.warning(f"[{name}] page {page_num:03d} failed: {exc}")
+            continue
+
+    # Every strategy exhausted — record permanent failure.
+    if failures is not None and last_error is not None:
+        failures.record(page_num, last_name, last_error)
+
+    logger.error(f"All image strategies exhausted for page {page_num:03d}")
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Completeness report — pure read, no side effects
 # ---------------------------------------------------------------------------
 
 PageReport = Dict[str, bool]   # file_key -> exists
 
 def check_all_files(pdf_path: str, base_dir: str = None) -> Dict[int, PageReport]:
-    """
-    For every page in the PDF return a dict describing which expected output
-    files exist on disk.  Makes no changes.
-
-    Return shape:
-        {
-            1: {"thumbnail": True,  "text": False},
-            2: {"thumbnail": True,  "text": True},
-            ...
-        }
-    """
     reader   = get_pdf_reader(pdf_path)
     n_pages  = len(reader.pages)
     report: Dict[int, PageReport] = {}
@@ -55,8 +241,18 @@ def is_complete(report: Dict[int, PageReport]) -> bool:
 
 
 def missing_pages(report: Dict[int, PageReport]) -> List[int]:
-    """Return page numbers where any expected file is absent."""
     return [i for i, checks in report.items() if not all(checks.values())]
+
+
+def repairable_pages(
+    report:   Dict[int, PageReport],
+    failures: FailureRegistry,
+) -> List[int]:
+    """Pages that are incomplete AND not permanently failed."""
+    return [
+        i for i, checks in report.items()
+        if not all(checks.values()) and not failures.is_failed(i)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -81,9 +277,10 @@ class SliceManager:
         engines                         = "layout_ocr",
         engine_directory: bool          = False,
         visualize:        bool          = None,
-        root_url                         = None,
-        media_root                       = None,
-        pdfs_public_url                  = None,
+        root_url                        = None,
+        media_root                      = None,
+        pdfs_public_url                 = None,
+        image_strategies: List[ImageStrategy] = None,
     ):
         self.root_url        = root_url        or ROOT_URL
         self.media_root      = media_root      or MEDIA_ROOT_DIR
@@ -103,11 +300,17 @@ class SliceManager:
         self.reader    = get_pdf_reader(self.pdf_path)
         self.pdf_pages = self.reader.pages
 
+        # Failure registry — shared across engines, persisted to disk
+        self.failures = FailureRegistry(self.base_dir)
+
+        # Image extraction fallback chain (caller can override)
+        self.image_strategies = image_strategies or DEFAULT_IMAGE_STRATEGIES
+
         # Directory tree
-        self.images = make_dir(self.base_dir, "thumbnails")
-        self.text   = make_dir(self.base_dir, "text")
-        self.pre    = make_dir(self.base_dir, "preprocessed")
-        self.pages  = make_dir(self.pre, "pages")
+        self.images  = make_dir(self.base_dir, "thumbnails")
+        self.text    = make_dir(self.base_dir, "text")
+        self.pre     = make_dir(self.base_dir, "preprocessed")
+        self.pages   = make_dir(self.pre, "pages")
         self.pre_txt = make_dir(self.pre, "txt")
         self.pre_img = make_dir(self.pre, "img")
         self.cols    = make_dir(self.pre_img, "cols")
@@ -126,98 +329,62 @@ class SliceManager:
                 "final_raw":   os.path.join(self.text, f"{self.filename}_{engine}_FULL.txt"),
                 "final_clean": os.path.join(self.text, f"{self.filename}_{engine}_FULL_cleaned.txt"),
             }
+
     # ---------------------------------------------------------
     # Paddle engine adapter
     # ---------------------------------------------------------
 
     def _engine_paddle(self, img_path: str, page_num: int, side_label: str):
-
         return self.process_single_column(
             img_path,
             page_num,
             "paddle",
-            side_label
+            side_label,
         )
+
     # ---------------------------------------------------------
     # Layout OCR engine adapter
     # ---------------------------------------------------------
 
     def _engine_layout(self, img_path: str, page_num: int, side_label: str):
-
         from abstract_ocr.layout_ocr.pipeline import run_on_image
         from abstract_ocr.layout_ocr.schemas import PipelineConfig
         from abstract_ocr import clean_text
         from abstract_pdfs import write_to_file
 
         config = PipelineConfig()
-
         report = run_on_image(img_path, config=config)
 
         raw_text = report.result.raw_text
-        clean = clean_text(raw_text)
+        clean    = clean_text(raw_text)
 
-        txt_name = f"{self.filename}_page_{page_num:03d}.txt"
-
-        raw_path = os.path.join(self.text, txt_name)
+        txt_name   = f"{self.filename}_page_{page_num:03d}.txt"
+        raw_path   = os.path.join(self.text, txt_name)
         clean_path = os.path.join(self.text, f"{self.filename}_page_{page_num:03d}_clean.txt")
 
         write_to_file(contents=raw_text, file_path=raw_path)
-        write_to_file(contents=clean, file_path=clean_path)
+        write_to_file(contents=clean,    file_path=clean_path)
 
         logger.info(f"[layout_ocr] OCR complete — page {page_num:03d}")
-
         return raw_text, clean
+
     # ---------------------------------------------------------
     # Engine dispatch
     # ---------------------------------------------------------
 
+    _ENGINE_MAP = {
+        "paddle":     "_engine_paddle",
+        "layout_ocr": "_engine_layout",
+    }
+
     def _run_engine(self, img_path: str, page_num: int, engine: str, side_label: str = ""):
-        """
-        Dispatch OCR processing to the correct engine adapter.
-        """
-        engine_map = {
-            "paddle": self._engine_paddle,
-            "layout_ocr": self._engine_layout,
-        }
-
-        if engine not in engine_map:
+        method_name = self._ENGINE_MAP.get(engine)
+        if method_name is None:
             raise ValueError(f"Unknown OCR engine: {engine}")
-
-        return engine_map[engine](img_path, page_num, side_label)
-    # ---------------------------------------------------------
-    # Completeness
-    # ---------------------------------------------------------
-
-    def get_completeness_report(self) -> Dict[int, PageReport]:
-        """
-        Return per-page existence checks for every expected output file.
-        Delegates to the standalone check_all_files so the logic lives in
-        one place and can be called without a SliceManager instance.
-        """
-        return check_all_files(self.pdf_path, self.base_dir)
-
-    def ensure_complete(self, engine: str) -> None:
-        """
-        Check every page for missing outputs and re-process only those pages.
-        Called at the start of process_pdf_for_engine so partial runs are
-        automatically repaired on the next invocation.
-        """
-        report = self.get_completeness_report()
-
-        if is_complete(report):
-            logger.info(f"[{engine}] all pages complete — nothing to repair")
-            return
-
-        gaps = missing_pages(report)
-        logger.info(f"[{engine}] repairing {len(gaps)} incomplete page(s): {gaps}")
-
-        for i in gaps:
-            page = self.pdf_pages[i - 1]   # pages is 0-indexed
-            logger.info(f"[{engine}] re-processing page {i:03d}")
-            self.process_page(page, i, engine)
+        return getattr(self, method_name)(img_path, page_num, side_label)
 
     # ---------------------------------------------------------
-    # Page image extraction (no intermediate PDF file)
+    # Page image extraction — fallback chain
     # ---------------------------------------------------------
 
     def extract_page_image(self, page, page_num: int) -> Optional[str]:
@@ -225,29 +392,52 @@ class SliceManager:
         page_dir = make_dir(self.images, page_str)
         img_path = os.path.join(page_dir, f"{self.filename}_{page_str}.png")
 
-        if os.path.exists(img_path):
-            return img_path
+        return extract_page_image_with_fallbacks(
+            pdf_path=self.pdf_path,
+            page=page,
+            page_num=page_num,
+            img_path=img_path,
+            strategies=self.image_strategies,
+            failures=self.failures,
+        )
 
-        try:
-            import io
-            from pdf2image import convert_from_bytes
+    # ---------------------------------------------------------
+    # Completeness
+    # ---------------------------------------------------------
 
-            buf = io.BytesIO()
-            writer = PyPDF2.PdfWriter()
-            writer.add_page(page)
-            writer.write(buf)
+    def get_completeness_report(self) -> Dict[int, PageReport]:
+        return check_all_files(self.pdf_path, self.base_dir)
 
-            images = convert_from_bytes(buf.getvalue())
-            if not images:
-                logger.warning(f"No image rendered for page {page_num:03d}")
-                return None
+    def ensure_complete(self, engine: str) -> None:
+        """
+        Re-process pages that are missing outputs AND have not permanently
+        failed.  Deterministic failures are recorded in the failure
+        registry and skipped on subsequent invocations.
+        """
+        report = self.get_completeness_report()
 
-            images[0].save(img_path, "PNG")
-            return img_path
+        if is_complete(report):
+            logger.info(f"[{engine}] all pages complete — nothing to repair")
+            return
 
-        except Exception as e:
-            logger.error(f"Page extraction failed on {page_num:03d}: {e}")
-            return None
+        to_repair = repairable_pages(report, self.failures)
+        skipped   = self.failures.failed_pages()
+
+        if skipped:
+            logger.info(
+                f"[{engine}] skipping {len(skipped)} permanently failed page(s)"
+            )
+
+        if not to_repair:
+            logger.info(f"[{engine}] no repairable pages remaining")
+            return
+
+        logger.info(f"[{engine}] repairing {len(to_repair)} incomplete page(s): {to_repair}")
+
+        for i in to_repair:
+            page = self.pdf_pages[i - 1]
+            logger.info(f"[{engine}] re-processing page {i:03d}")
+            self.process_page(page, i, engine)
 
     # ---------------------------------------------------------
     # Single-column OCR
@@ -255,9 +445,9 @@ class SliceManager:
 
     def process_single_column(
         self,
-        img_path:  str,
-        page_num:  int,
-        engine:    str,
+        img_path:   str,
+        page_num:   int,
+        engine:     str,
         side_label: str = "",
     ) -> Tuple[str, str]:
         from abstract_pdfs import write_to_file, read_from_file
@@ -273,7 +463,6 @@ class SliceManager:
         cln_path = os.path.join(dirs["clean_tx"], txt_name)
         proc_img = os.path.join(dirs["pre_img"],  f"page_{page_num:03d}{suffix}.png")
 
-        # BUG FIX: removed `input(cln_path)` debug call
         if os.path.isfile(txt_path) and os.path.isfile(cln_path):
             return read_from_file(txt_path), read_from_file(cln_path)
 
@@ -282,15 +471,18 @@ class SliceManager:
         df  = layered_ocr_img(image_array, engine=engine)
         txt = "\n".join(df["text"].tolist())
         write_to_file(contents=txt, file_path=txt_path)
-        
+
         cln = clean_text(txt)
         write_to_file(contents=cln, file_path=cln_path)
 
         logger.info(f"[{engine}] OCR complete — page {page_num:03d}{suffix}")
         return txt, cln
 
-    def process_page(self, page, page_num: int, engine: str) -> Dict:
+    # ---------------------------------------------------------
+    # Process page
+    # ---------------------------------------------------------
 
+    def process_page(self, page, page_num: int, engine: str) -> Dict:
         from abstract_ocr.ocr_utils.column_utils import (
             detect_columns,
             validate_reading_order,
@@ -302,70 +494,49 @@ class SliceManager:
             "right": {"raw": {"text": None}, "clean": {"text": None}},
         }
 
+        img_path = self.extract_page_image(page, page_num)
+
+        if not img_path:
+            # extract_page_image already recorded the failure — bail cleanly.
+            return result
+
         try:
-            img_path = self.extract_page_image(page, page_num)
-
-            if not img_path:
-                return result
-
-            # -----------------------------------------------------
             # Layout OCR runs on full page (no column slicing)
-            # -----------------------------------------------------
-
             if engine == "layout_ocr":
-
                 txt, cln = self._run_engine(img_path, page_num, engine)
-
-                result["left"]["raw"]["text"] = txt
+                result["left"]["raw"]["text"]   = txt
                 result["left"]["clean"]["text"] = cln
-
                 return result
 
-            # -----------------------------------------------------
             # Standard column OCR engines
-            # -----------------------------------------------------
-
             divider, _ = detect_columns(img_path)
 
             validate_reading_order(
                 img_path,
                 divider,
-                visualize=self.visualize
+                visualize=self.visualize,
             )
 
             left_img  = os.path.join(self.cols, f"{self.filename}_page_{page_num:03d}_left.png")
             right_img = os.path.join(self.cols, f"{self.filename}_page_{page_num:03d}_right.png")
 
             if os.path.exists(left_img) and os.path.exists(right_img):
-
                 columns = {
                     "left":  {"image": {"path": left_img}},
                     "right": {"image": {"path": right_img}},
                 }
-
             else:
-
-                columns = slice_columns(
-                    img_path,
-                    divider,
-                    self.cols,
-                    {}
-                )
+                columns = slice_columns(img_path, divider, self.cols, {})
 
             for side in ("left", "right"):
-
                 side_path = columns.get(side, {}).get("image", {}).get("path")
-
                 if not side_path:
                     continue
-
                 txt, cln = self._run_engine(side_path, page_num, engine, side)
-
-                result[side]["raw"]["text"] = txt
+                result[side]["raw"]["text"]   = txt
                 result[side]["clean"]["text"] = cln
 
         except Exception as e:
-
             logger.error(f"[{engine}] page {page_num:03d} failed: {e}")
             traceback.print_exc()
 
@@ -380,7 +551,7 @@ class SliceManager:
 
         logger.info(f"[{engine}] starting OCR — {self.filename}")
 
-        # Repair any pages from a previous incomplete run before doing anything else.
+        # Repair incomplete pages (skips permanently failed ones).
         self.ensure_complete(engine)
 
         dirs       = self.engine_dirs[engine]
@@ -397,10 +568,14 @@ class SliceManager:
             logger.info(f"[{engine}] cached — skipping OCR")
             return
 
-        all_left  = []
-        all_right = []
+        all_left:  List[str] = []
+        all_right: List[str] = []
 
         for i, page in enumerate(self.pdf_pages, start=1):
+            # Skip pages we know cannot be processed.
+            if self.failures.is_failed(i):
+                continue
+
             res = self.process_page(page, i, engine)
 
             if res["left"]["raw"]["text"]:
@@ -413,7 +588,14 @@ class SliceManager:
         write_to_file(contents="\n\n".join(all_left),  file_path=left_path)
         write_to_file(contents="\n\n".join(all_right), file_path=right_path)
 
-        logger.info(f"[{engine}] OCR complete")
+        failed = self.failures.failed_pages()
+        if failed:
+            logger.warning(
+                f"[{engine}] OCR complete with {len(failed)} permanently "
+                f"failed page(s): {failed}"
+            )
+        else:
+            logger.info(f"[{engine}] OCR complete")
 
     # ---------------------------------------------------------
     # Multi-engine entry point
@@ -435,6 +617,13 @@ class SliceManager:
                 self.pdfs_public_url,
             )
 
-        logger.info("OCR pipeline complete")
-        return self.file_parts
+        failed = self.failures.failed_pages()
+        if failed:
+            logger.warning(
+                f"OCR pipeline complete — {len(failed)} page(s) permanently "
+                f"failed (see {self.failures._path})"
+            )
+        else:
+            logger.info("OCR pipeline complete")
 
+        return self.file_parts
