@@ -1,5 +1,4 @@
 from .imports import *
-
 # ---------------------------------------------------------------------------
 # Path helpers — one place, used by both standalone functions and SliceManager
 # ---------------------------------------------------------------------------
@@ -127,7 +126,64 @@ class SliceManager:
                 "final_raw":   os.path.join(self.text, f"{self.filename}_{engine}_FULL.txt"),
                 "final_clean": os.path.join(self.text, f"{self.filename}_{engine}_FULL_cleaned.txt"),
             }
+    # ---------------------------------------------------------
+    # Paddle engine adapter
+    # ---------------------------------------------------------
 
+    def _engine_paddle(self, img_path: str, page_num: int, side_label: str):
+
+        return self.process_single_column(
+            img_path,
+            page_num,
+            "paddle",
+            side_label
+        )
+    # ---------------------------------------------------------
+    # Layout OCR engine adapter
+    # ---------------------------------------------------------
+
+    def _engine_layout(self, img_path: str, page_num: int, side_label: str):
+
+        from layout_ocr.pipeline import run_on_image
+        from layout_ocr.schemas import PipelineConfig
+        from abstract_ocr import clean_text
+        from abstract_pdfs import write_to_file
+
+        config = PipelineConfig()
+
+        report = run_on_image(img_path, config=config)
+
+        raw_text = report.result.raw_text
+        clean = clean_text(raw_text)
+
+        txt_name = f"{self.filename}_page_{page_num:03d}.txt"
+
+        raw_path = os.path.join(self.text, txt_name)
+        clean_path = os.path.join(self.text, f"{self.filename}_page_{page_num:03d}_clean.txt")
+
+        write_to_file(contents=raw_text, file_path=raw_path)
+        write_to_file(contents=clean, file_path=clean_path)
+
+        logger.info(f"[layout_ocr] OCR complete — page {page_num:03d}")
+
+        return raw_text, clean
+    # ---------------------------------------------------------
+    # Engine dispatch
+    # ---------------------------------------------------------
+
+    def _run_engine(self, img_path: str, page_num: int, engine: str, side_label: str = ""):
+        """
+        Dispatch OCR processing to the correct engine adapter.
+        """
+        engine_map = {
+            "paddle": self._engine_paddle,
+            "layout_ocr": self._engine_layout,
+        }
+
+        if engine not in engine_map:
+            raise ValueError(f"Unknown OCR engine: {engine}")
+
+        return engine_map[engine](img_path, page_num, side_label)
     # ---------------------------------------------------------
     # Completeness
     # ---------------------------------------------------------
@@ -233,13 +289,12 @@ class SliceManager:
         logger.info(f"[{engine}] OCR complete — page {page_num:03d}{suffix}")
         return txt, cln
 
-    # ---------------------------------------------------------
-    # Per-page processing
-    # ---------------------------------------------------------
-
     def process_page(self, page, page_num: int, engine: str) -> Dict:
+
         from abstract_ocr.ocr_utils.column_utils import (
-            detect_columns, validate_reading_order, slice_columns,
+            detect_columns,
+            validate_reading_order,
+            slice_columns,
         )
 
         result = {
@@ -249,34 +304,68 @@ class SliceManager:
 
         try:
             img_path = self.extract_page_image(page, page_num)
+
             if not img_path:
                 return result
 
+            # -----------------------------------------------------
+            # Layout OCR runs on full page (no column slicing)
+            # -----------------------------------------------------
+
+            if engine == "layout_ocr":
+
+                txt, cln = self._run_engine(img_path, page_num, engine)
+
+                result["left"]["raw"]["text"] = txt
+                result["left"]["clean"]["text"] = cln
+
+                return result
+
+            # -----------------------------------------------------
+            # Standard column OCR engines
+            # -----------------------------------------------------
+
             divider, _ = detect_columns(img_path)
-            validate_reading_order(img_path, divider, visualize=self.visualize)
-            full_cln_txt_path = os.path.join(self.text, f"{self.filename}_page_{page_num:03d}.txt")
-            full_cln_txt = []
+
+            validate_reading_order(
+                img_path,
+                divider,
+                visualize=self.visualize
+            )
+
             left_img  = os.path.join(self.cols, f"{self.filename}_page_{page_num:03d}_left.png")
             right_img = os.path.join(self.cols, f"{self.filename}_page_{page_num:03d}_right.png")
 
             if os.path.exists(left_img) and os.path.exists(right_img):
+
                 columns = {
                     "left":  {"image": {"path": left_img}},
                     "right": {"image": {"path": right_img}},
                 }
+
             else:
-                columns = slice_columns(img_path, divider, self.cols, {})
+
+                columns = slice_columns(
+                    img_path,
+                    divider,
+                    self.cols,
+                    {}
+                )
 
             for side in ("left", "right"):
+
                 side_path = columns.get(side, {}).get("image", {}).get("path")
+
                 if not side_path:
                     continue
-                txt, cln = self.process_single_column(side_path, page_num, engine, side)
-                result[side]["raw"]["text"]   = txt
+
+                txt, cln = self._run_engine(side_path, page_num, engine, side)
+
+                result[side]["raw"]["text"] = txt
                 result[side]["clean"]["text"] = cln
-                full_cln_txt.append(cln)
-            write_to_file(contents='\n'.join(full_cln_txt),file_path=full_cln_txt_path)
+
         except Exception as e:
+
             logger.error(f"[{engine}] page {page_num:03d} failed: {e}")
             traceback.print_exc()
 
@@ -332,7 +421,7 @@ class SliceManager:
 
     def process_pdf(self, manifest: bool = True) -> Dict:
         logger.info(f"Starting OCR pipeline — {self.filename}")
-
+        engine = engine 
         for engine in self.engines:
             self.process_pdf_for_engine(engine)
 
@@ -348,3 +437,4 @@ class SliceManager:
 
         logger.info("OCR pipeline complete")
         return self.file_parts
+

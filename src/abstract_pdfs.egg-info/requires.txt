@@ -2,3 +2,6 @@ abstract_ocr
 abstract_utilities
 pymupdf
 PyMuPDF
+SpeechRecognition
+keybert
+whisper

@@ -4,7 +4,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 setuptools.setup(
     name='abstract_pdfs',
-    version='0.0.8',
+    version='0.0.9',
     author='putkoff',
     author_email='partners@abstractendeavors.com',
     description='A modular OCR and PDF-processing toolkit for automated text extraction, deduplication, and multi-engine column-aware OCR using Tesseract, EasyOCR, and PaddleOCR',
@@ -22,7 +22,11 @@ setuptools.setup(
         'abstract_ocr',
         'abstract_utilities',
         'pymupdf',
-        'PyMuPDF'
+        'PyMuPDF',
+        'SpeechRecognition',
+        'keybert',
+        'whisper',
+        
         ]
 ,
    package_dir={"": "src"},
