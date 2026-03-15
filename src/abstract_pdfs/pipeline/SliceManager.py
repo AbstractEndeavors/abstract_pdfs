@@ -78,7 +78,7 @@ class SliceManager:
         self,
         pdf_path:         str,
         out_root:         Optional[str] = None,
-        engines                         = "paddle",
+        engines                         = "layout_ocr",
         engine_directory: bool          = False,
         visualize:        bool          = None,
         root_url                         = None,
@@ -421,7 +421,7 @@ class SliceManager:
 
     def process_pdf(self, manifest: bool = True) -> Dict:
         logger.info(f"Starting OCR pipeline — {self.filename}")
-        engine = engine 
+
         for engine in self.engines:
             self.process_pdf_for_engine(engine)
 
