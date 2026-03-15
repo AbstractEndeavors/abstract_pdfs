@@ -144,8 +144,8 @@ class SliceManager:
 
     def _engine_layout(self, img_path: str, page_num: int, side_label: str):
 
-        from layout_ocr.pipeline import run_on_image
-        from layout_ocr.schemas import PipelineConfig
+        from abstract_ocr.layout_ocr.pipeline import run_on_image
+        from abstract_ocr.layout_ocr.layout_ocr.schemas import PipelineConfig
         from abstract_ocr import clean_text
         from abstract_pdfs import write_to_file
 
