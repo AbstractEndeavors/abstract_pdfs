@@ -1,2 +1,2 @@
 from .src import *
-from .PDFWorkspace import PDFWorkspace
+from .PDFWorkspace import PDFWorkspace,PDFWorkspaceResolver
