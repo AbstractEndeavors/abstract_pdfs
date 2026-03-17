@@ -10,6 +10,8 @@ def write_json(path: Path, data: dict | list, dry_run: bool, overwrite: bool) ->
     dry_run:   print what would happen, don't write
     overwrite: allow replacing existing files
     """
+    if isinstance(path,str):
+        path = Path(path)
     if path.exists() and not overwrite:
         return f"  SKIP (exists, use --overwrite): {path}"
 
@@ -24,6 +26,8 @@ def write_json(path: Path, data: dict | list, dry_run: bool, overwrite: bool) ->
 
 
 def write_text(path: Path, content: str, dry_run: bool, overwrite: bool) -> str:
+    if isinstance(path,str):
+        path = Path(path)
     if path.exists() and not overwrite:
         return f"  SKIP (exists, use --overwrite): {path}"
     if dry_run:

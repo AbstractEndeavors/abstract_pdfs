@@ -13,6 +13,33 @@ def get_dict(obj):
         except Exception as e:
             logger.info(f"ERROR in generators.py via {obj}: {e}")
     return obj
+def fill_nulls(target, source):
+    """
+    Recursively fill None/missing values in target from source.
+    Returns (target, changed) where changed is True if anything was updated.
+    """
+    changed = False
+    for key, value in source.items():
+        existing = target.get(key)
+        if isinstance(value, dict) and isinstance(existing, dict):
+            _, child_changed = fill_nulls(existing, value)
+            changed = changed or child_changed
+        elif existing is None and value is not None:
+            target[key] = value
+            changed = True
+    return target, changed
+def update_json(path,source):
+    exists = os.path.isfile(path)
+    source = get_dict(source)
+    if exists:
+        data = safe_load_from_json(path)
+        target, changed=fill_nulls(data, source)
+        if changed:
+            safe_dump_to_json(file_path=path, data=target)
+        return target
+    else:
+       safe_dump_to_json(file_path=path, data=source)
+       return source
 def get_page_num(i):
     i+=1
     return f"{i:03d}"
@@ -108,7 +135,9 @@ def generate_pdf_page_manifest(
     image=True,
     media_root=None,
     base_url=None,
-    pdfs_public_url=None
+    pdfs_public_url=None,
+    write=True,
+    overwrite=False
     ):
         page_num = get_page_num(page_i)
         page_str = get_page_str(page_i)
@@ -116,8 +145,7 @@ def generate_pdf_page_manifest(
         base_url=base_url or ROOT_URL
         media_root = media_root or MEDIA_ROOT_DIR 
         pdfs_public_url = pdfs_public_url  or PDFS_ROOT_DIR
-    
-        
+
         
         # Text
         longdesc = ""
@@ -144,6 +172,8 @@ def generate_pdf_page_manifest(
         # Thumbnail
         thumb_page_path = makePath(thumb_dir) / page_str
         thumb_path = thumb_page_path / f"{page_tag}.png"
+        dir_rel     = thumb_path.parent.relative_to(media_root)
+        dir_path    = "/" + str(dir_rel).replace("\\", "/").lstrip("/")
         info_path = thumb_page_path / f"info.json"
         thumb_abs  = str(thumb_path)
         try:
@@ -157,11 +187,13 @@ def generate_pdf_page_manifest(
             og_image_alt  = thumb_url,
             twitter_image = thumb_url,
         )
+        page_url   = base_url.rstrip("/") + dir_path
         alt = f"{page_tag} | page {page_num} | {pdfs_public_url}"
         caption = f"{filename}.pdf page {page_num}"
         title = f"{filename}.pdf_page_{page_num}"
         schema = {"name": page_tag, "url": pdfs_public_url}
-        entry = PdfPageManifestEntry(
+        entry =PdfPageManifestEntry(
+            page_url     = page_url,
             alt          = alt,
             caption      = caption,
             keywords_str = keywords,
@@ -177,28 +209,11 @@ def generate_pdf_page_manifest(
             image_path   = thumb_abs,
         )
         
-        if image:
-            image_info = generate_image_info(
-                thumb_path,
-                info_path,
-                longdesc,
-                alt,
-                caption,
-                longdesc,
-                keywords,
-                social,
-                title,
-                schema,
-                base_url,
-                media_root
-                )
-##            input(longdesc)
-##            print(info_path)
-##            input(get_dict(image_info))
-            safe_dump_to_json(
-                file_path=info_path,
-                data=get_dict(image_info)
-                )
+        if write:
+            if overwrite:
+                safe_dump_to_json(data=get_dict(entry),file_path=info_path)
+            else:
+                update_json(info_path,entry)
             
         return entry
 def generate_pdf_manifest(
@@ -207,7 +222,9 @@ def generate_pdf_manifest(
     thumb_root: Path | None = None,
     base_url: str | None = None,
     media_root: Path | None = None,
-    pdfs_public_url: Path | None = None
+    pdfs_public_url: Path | None = None,
+    write=True,
+    overwrite=False
 ) -> list[PdfPageManifestEntry]:
     """
     Build a manifest entry per PDF page.
@@ -255,10 +272,11 @@ def generate_pdf_manifest(
             thumb_dir,
             pdf_dir,
             pdf_path,
-            image=True,
             media_root=media_root,
             base_url=base_url,
-            pdfs_public_url=pdfs_public_url
+            pdfs_public_url=pdfs_public_url,
+            write=write,
+            overwrite=overwrite
             )
         entries.append(entry)
     if HAS_FITZ:

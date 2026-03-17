@@ -95,6 +95,7 @@ class ImageInfoJson:
 @dataclass
 class PdfPageManifestEntry:
     """One entry in {pdf_base}_manifest.json. Mirrors existing manifest structure."""
+    page_url:     str = ""
     alt:          str = ""
     caption:      str = ""
     keywords_str: str = ""

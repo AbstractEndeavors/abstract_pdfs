@@ -1,25 +1,38 @@
+# main.py
 from .cli import abstract_scaffold_build_parser
-from .handlers import cmd_image,cmd_pdf,cmd_page
-def abstract_scaffold_main() -> int:
+from .handlers import cmd_image, cmd_pdf, cmd_page
+
+def abstract_scaffold_main(argv=None):
     parser = abstract_scaffold_build_parser()
-    args   = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    # ── Validate shared required args ─────────────────────────────────────────
     if not args.base_url:
-        print("ERROR: --base-url is required (or set BASE_URL / NEXT_PUBLIC_API_BASE env var)",
-              file=sys.stderr)
+        print("ERROR: --base-url required", file=sys.stderr)
         return 1
 
-    cmd = args.command
+    if args.command == "image":
+        if not args.media_root:
+            print("ERROR: --media-root required", file=sys.stderr)
+            return 1
+        return cmd_image(args.input, base_url=args.base_url,
+                         media_root=args.media_root, write=args.write,
+                         overwrite=args.overwrite)
 
-    if cmd in ("image", "pdf") and not args.media_root:
-        print("ERROR: --media-root is required for image/pdf commands (or set MEDIA_ROOT / PUBLIC_ROOT)",
-              file=sys.stderr)
-        return 1
+    if args.command == "pdf":
+        if not args.media_root:
+            print("ERROR: --media-root required", file=sys.stderr)
+            return 1
+        return cmd_pdf(args.input, base_url=args.base_url,
+                       media_root=args.media_root, write=args.write,
+                       overwrite=args.overwrite)
 
-    if cmd == "image":  return cmd_image(args)
-    if cmd == "pdf":    return cmd_pdf(args)
-    if cmd == "page":   return cmd_page(args)
+    if args.command == "page":
+        return cmd_page(section=args.section, slug=args.slug,
+                        title=args.title, description=args.description,
+                        thumbnail=args.thumbnail, base_url=args.base_url,
+                        pages_root=args.pages_root, keywords=args.keywords,
+                        content_file=args.content_file, write=args.write,
+                        overwrite=args.overwrite)
 
     parser.print_help()
     return 1
