@@ -52,6 +52,7 @@ src/abstract_pdfs/imports/utils/document_slug.py
 src/abstract_pdfs/imports/utils/imports.py
 src/abstract_pdfs/imports/utils/utils.py
 src/abstract_pdfs/pdf_utils/__init__.py
+src/abstract_pdfs/pdf_utils/extract_raw_pdf_text.py
 src/abstract_pdfs/pdf_utils/imports.py
 src/abstract_pdfs/pdf_utils/manifest_utils.py
 src/abstract_pdfs/pdf_utils/pdf_paths.py

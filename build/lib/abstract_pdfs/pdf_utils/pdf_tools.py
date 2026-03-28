@@ -46,7 +46,17 @@ def images_to_pdf(image_paths: List[str], output_pdf: Optional[str] = None) -> s
     logger.info(f"📘 PDF saved as: {output_pdf}")
     return output_pdf
 
-
+def read_pdf(pdf_path):
+    return PyPDF2.PdfReader(pdf_path)
+def get_pdf_pages(pdf_path=None,pdf_reader=None):
+    if not pdf_reader and not pdf_path:
+        return
+    if not pdf_reader:
+        pdf_reader = read_pdf(pdf_path)
+    return pdf_reader.pages
+def get_num_pdf_pages(pdf_path=None,pdf_reader=None):
+    pdf_pages = get_pdf_pages(pdf_path=pdf_path,pdf_reader=pdf_reader)
+    return len(pdf_pages)
 # ------------------------------------------------------
 #  PDF → MULTI-PAGE PROCESSOR
 # ------------------------------------------------------
@@ -86,11 +96,12 @@ def process_pdf(main_pdf_path: str, pdf_output_dir: Optional[str] = None) -> Non
     for path in subdirs.values():
         os.makedirs(path, exist_ok=True)
 
-    pdf_reader = PyPDF2.PdfReader(main_pdf_path)
-    num_pages = len(pdf_reader.pages)
+    pdf_reader = read_pdf(main_pdf_path)
+    pdf_pages = get_pdf_pages(pdf_reader=pdf_reader)
+    num_pages = get_num_pdf_pages(pdf_reader=pdf_reader)
     logger.info(f"📄 Processing {pdf_name} with {num_pages} pages...")
 
-    for i, page in enumerate(pdf_reader.pages, start=1):
+    for i, page in enumerate(pdf_pages, start=1):
         try:
             base = f"{pdf_name}_page_{i}"
             basename_pdf = f"{base}.pdf"
