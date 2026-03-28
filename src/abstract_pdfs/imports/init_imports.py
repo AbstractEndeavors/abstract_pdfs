@@ -9,6 +9,9 @@ from PIL import Image
 from abstract_ocr import *
 from pdf2image import convert_from_path
 import os, shutil, hashlib, re, logging, PyPDF2,traceback,unicodedata,argparse,json,sys
+logger = logging.getLogger("")
+logging.basicConfig(level=logging.INFO)
+
 from abstract_utilities import (
     mkdirs as make_dir,
     get_ext,
@@ -21,7 +24,7 @@ from abstract_utilities import (
     write_to_file,
     get_file_parts
     )
-logger = get_logFile("abstract_pdf")
+
 try:
     from PIL import Image as PILImage
     HAS_PIL = True
