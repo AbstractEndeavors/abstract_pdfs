@@ -156,7 +156,7 @@ def extract_pdf_pre_ocr(
 # -------------------------
 # CONVENIENCE: Extract single page
 # -------------------------
-def extract_single_page(pdf_path: str, page_index: int):
+def extract_single_pdf_page_text(pdf_path: str, page_index: int):
     """Extract a specific page only."""
     result = extract_pdf_pre_ocr(pdf_path, first_page=page_index, last_page=page_index)
     return next((item.get('text') for item in result["pages"] if item), None)
