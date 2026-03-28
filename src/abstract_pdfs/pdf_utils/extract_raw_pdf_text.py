@@ -1,7 +1,8 @@
 # pdf_pre_ocr_extractor.py
 import logging
-logger = logging.getLogger("pdf_pre_ocr_extractor")
-logger.setLevel(logging.WARNING)
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("pdfminer").setLevel(logging.WARNING)
+logging.getLogger("pdfplumber").setLevel(logging.WARNING)
 import pdfplumber
 from PyPDF2 import PdfReader
 
