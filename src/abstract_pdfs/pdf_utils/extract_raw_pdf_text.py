@@ -159,4 +159,4 @@ def extract_pdf_pre_ocr(
 def extract_single_page(pdf_path: str, page_index: int):
     """Extract a specific page only."""
     result = extract_pdf_pre_ocr(pdf_path, first_page=page_index, last_page=page_index)
-    return result["pages"][0] if result["pages"] else None
+    return next((item.get('text') for item in result["pages"] if item), None)
