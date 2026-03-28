@@ -51,5 +51,10 @@ def abstract_scaffold_build_parser() -> argparse.ArgumentParser:
                         help="Thumbnail dir relative to public/, e.g. 'imgs/cannabis/cannabis-oil-and-leaves'")
     p_page.add_argument("--keywords",    default="", help="Comma-separated keywords")
     p_page.add_argument("--content-file", default="", help="Override content_file path")
-
+    p_pipe = sub.add_parser("pipeline", parents=[shared],
+                            help="Full run: manifest PDFs, info images, generate indexes")
+    p_pipe.add_argument("--input", required=True, help="Root directory to process")
+    p_pipe.add_argument("--site-root", default=None, dest="site_root")
+    p_pipe.add_argument("--no-recurse", action="store_true", dest="no_recurse")
+    p_pipe.add_argument("--dry-run", action="store_true", dest="dry_run")
     return root

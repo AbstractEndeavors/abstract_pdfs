@@ -6,46 +6,7 @@ from .probers import (
 # ─────────────────────────────────────────────────────────────────────────────
 # Generators
 # ─────────────────────────────────────────────────────────────────────────────
-def get_dict(obj):
-    if not isinstance(obj,dict):
-        try:
-            obj = obj.to_dict()
-        except Exception as e:
-            logger.info(f"ERROR in generators.py via {obj}: {e}")
-    return obj
-def fill_nulls(target, source):
-    """
-    Recursively fill None/missing values in target from source.
-    Returns (target, changed) where changed is True if anything was updated.
-    """
-    changed = False
-    for key, value in source.items():
-        existing = target.get(key)
-        if isinstance(value, dict) and isinstance(existing, dict):
-            _, child_changed = fill_nulls(existing, value)
-            changed = changed or child_changed
-        elif existing is None and value is not None:
-            target[key] = value
-            changed = True
-    return target, changed
-def update_json(path,source):
-    exists = os.path.isfile(path)
-    source = get_dict(source)
-    if exists:
-        data = safe_load_from_json(path)
-        target, changed=fill_nulls(data, source)
-        if changed:
-            safe_dump_to_json(file_path=path, data=target)
-        return target
-    else:
-       safe_dump_to_json(file_path=path, data=source)
-       return source
-def get_page_num(i):
-    i+=1
-    return f"{i:03d}"
-def get_page_str(i):
-    page_num = get_page_num(i)
-    return f"page_{page_num}"
+
 def generate_image_info(
     img_path: Path,
     info_path:Path,
@@ -69,16 +30,16 @@ def generate_image_info(
     base_url=base_url or ROOT_URL
     media_root = media_root or MEDIA_ROOT_DIR 
     w, h, size_mb = probe_image(img_path)
-    stem     = img_path.stem
-    ext      = img_path.suffix
+    stem     = get_safe_filename(img_path)
+    ext      = get_safe_ext(img_path)
     media_root = makePath(media_root)
     # Compute URL path relative to media_root.
     # Walk up ancestors until we find one that is media_root, or fall back to
     # just the filename so the tool never crashes on unexpected layouts.
     try:
-        rel         = img_path.relative_to(media_root)
+        rel         = safe_rel_path(img_path,media_root)
         public_path = "/" + str(rel).replace("\\", "/")
-        dir_rel     = img_path.parent.relative_to(media_root)
+        dir_rel     = safe_rel_path(get_safe_dirname(img_path),media_root)
         dir_path    = "/" + str(dir_rel).replace("\\", "/").lstrip("/")
     except ValueError:
         # img_path is not under media_root — use the bare filename and warn
@@ -170,14 +131,14 @@ def generate_pdf_page_manifest(
             w, h = int(rect.width), int(rect.height)
 
         # Thumbnail
-        thumb_page_path = makePath(thumb_dir) / page_str
-        thumb_path = thumb_page_path / f"{page_tag}.png"
-        dir_rel     = thumb_path.parent.relative_to(media_root)
+        thumb_page_path = safe_join_path(thumb_dir, page_str)
+        thumb_path = safe_join_path(thumb_page_path,f"{page_tag}.png")
+        dir_rel     = safe_rel_path(get_safe_dirname(thumb_path),media_root)
         dir_path    = "/" + str(dir_rel).replace("\\", "/").lstrip("/")
-        info_path = thumb_page_path / f"info.json"
+        info_path = safe_join_path(thumb_page_path,f"info.json")
         thumb_abs  = str(thumb_path)
         try:
-            rel_thumb = thumb_path.relative_to(media_root)
+            rel_thumb = safe_rel_path(thumb_path,media_root)
             thumb_url = base_url.rstrip("/") + "/" + str(rel_thumb).replace("\\", "/")
         except ValueError:
             thumb_url = base_url.rstrip("/") + f"/pdfs/{filename}/thumbnails/{page_tag}.png"
@@ -201,7 +162,7 @@ def generate_pdf_page_manifest(
             ext          = ".png",
             title        = title,
             dimensions   = {"width": w, "height": h},
-            file_size    = round(thumb_path.stat().st_size / 1_048_576, 3) if thumb_path.exists() else 0.0,
+            file_size    = round(get_pathlib_path(thumb_path).stat().st_size / 1_048_576, 3) if get_pathlib_path(thumb_path).exists() else 0.0,
             longdesc     = longdesc,
             schema       = schema,
             social_meta  = social.to_dict(),
@@ -235,20 +196,22 @@ def generate_pdf_manifest(
 
     Both default to {pdf_dir}/text/ and {pdf_dir}/thumbnails/ respectively.
     """
+
     base_url=base_url or ROOT_URL
     media_root = media_root or MEDIA_ROOT_DIR 
     pdfs_public_url = pdfs_public_url  or PDFS_ROOT_DIR
     if not HAS_FITZ:
         print("  ⚠  PyMuPDF (fitz) not installed — page text/dimensions will be empty.")
         print("     pip install pymupdf")
-    pdf_path = makePath(pdf_path)
-    filename     = pdf_path.stem
-    pdf_dir  = pdf_path.parent
-    text_dir  = text_root  or (pdf_dir / "text")
-    thumb_dir = thumb_root or (pdf_dir / "thumbnails")
+    pdf_parts = get_file_parts(pdf_path)
+    pdf_path = pdf_parts.get('file_path')
+    filename     = pdf_parts.get('filename')
+    pdf_dir  = pdf_parts.get('dirname')
+    text_dir  = text_root  or safe_join_path(pdf_dir,"text")
+    thumb_dir = thumb_root or safe_join_path(pdf_dir,"thumbnails")
     
     try:
-        rel = pdf_path.relative_to(media_root)
+        rel = safe_rel_path(pdf_path,media_root)
         pdfs_public_url = base_url.rstrip("/") + "/" + str(rel).replace("\\", "/")
     except ValueError:
         pdfs_public_url = base_url.rstrip("/") + "/" + pdf_path.name

@@ -13,14 +13,14 @@ def get_file_hash(file_path: str, hash_algorithm: str = "sha256", chunk_size: in
 
 def is_pdf_file(file_path: str) -> bool:
     """Check if a file is a PDF based on its extension."""
-    return file_path.lower().endswith(".pdf")
+    return str(file_path).lower().endswith(".pdf")
 
 
 def get_preferred_filename(filenames: List[str]) -> str:
     """Return the best name among duplicates (lowest numbered or unsuffixed)."""
     name_info = []
     for fname in filenames:
-        base_name, ext = os.path.splitext(fname)
+        base_name, ext = os.path.splitext(str(fname))
         match = re.match(r"^(.*?)(?:_(\d+))?$", base_name)
         if match:
             core_name, suffix = match.groups()
@@ -84,18 +84,19 @@ def pdf_to_text_in_folders(src_dir: str, dest_base_dir: str):
     Copy unique PDFs to individual folders under `dest_base_dir`,
     split into pages, convert to images, extract text, and save results.
     """
-    src = Path(src_dir)
-    dest_base = Path(dest_base_dir)
+    
+    src = get_pathlib_path(src_dir)
+    dest_base = get_pathlib_path(dest_base_dir)
     dest_base.mkdir(parents=True, exist_ok=True)
 
     hash_registry = {}
     copied_count = skipped_count = 0
 
     # Phase 1: Identify unique PDFs
-    for fname in os.listdir(src):
+    for fname in os.listdir(str(src)):
         if not is_pdf_file(fname):
             continue
-        src_file = src / fname
+        src_file = safe_join_path(src ,fname)
         file_hash = get_file_hash(src_file)
         entry = hash_registry.setdefault(file_hash, {"filename": fname, "duplicates": []})
         entry["duplicates"].append(str(src_file))
@@ -103,16 +104,16 @@ def pdf_to_text_in_folders(src_dir: str, dest_base_dir: str):
     # Phase 2: Process each unique
     for file_hash, info in hash_registry.items():
         duplicates = info["duplicates"]
-        preferred_name = get_preferred_filename([Path(f).name for f in duplicates])
-        src_file = Path(duplicates[0])
+        preferred_name = get_preferred_filename([get_safe_basename(f) for f in duplicates])
+        src_file = get_pathlib_path(duplicates[0])
 
-        base_name = Path(preferred_name).stem
+        base_name = get_safe_filename(preferred_name)
         pdf_dir = dest_base / base_name
         for sub in ["pdf_pages", "images", "text"]:
             mkdirs(pdf_dir / sub)
 
         # Copy main file
-        dest_file = pdf_dir / preferred_name
+        dest_file = safe_join_path(pdf_dir,preferred_name)
         try:
             shutil.copy2(src_file, dest_file)
             copied_count += 1
@@ -122,7 +123,7 @@ def pdf_to_text_in_folders(src_dir: str, dest_base_dir: str):
             continue
 
         # Split into pages
-        pdf_pages = split_pdf(dest_file, pdf_dir / "pdf_pages")
+        pdf_pages = split_pdf(dest_file, safe_join_path(pdf_dir,"pdf_pages"))
         if not pdf_pages:
             continue
 
@@ -132,8 +133,8 @@ def pdf_to_text_in_folders(src_dir: str, dest_base_dir: str):
                 images = convert_from_path(page_path)
                 if not images:
                     continue
-                img_path = pdf_dir / "images" / (Path(page_path).stem + ".png")
-                txt_path = pdf_dir / "text" / (Path(page_path).stem + ".txt")
+                img_path = safe_join_path(pdf_dir,safe_join_path("images",(get_safe_filename(page_path) + ".png")))
+                txt_path = safe_join_path(pdf_dir,safe_join_path("text",(get_safe_filename(page_path) + ".txt")))
                 images[0].save(img_path, "PNG")
                 text = image_to_text(img_path)
                 write_to_file(file_path=txt_path, contents=text)
@@ -154,13 +155,13 @@ def pdf_to_text_in_folders(src_dir: str, dest_base_dir: str):
 # -----------------------------------------------------
 def convert_pdf_tree(pdf_dir: str):
     """Process a single PDF directory recursively."""
-    pdf_dir = Path(pdf_dir)
-    out_root = pdf_dir / "pdf_convert" / pdf_dir.name
+    pdf_dir = get_pathlib_path(pdf_dir)
+    out_root = safe_join_path(safe_join_path(pdf_dir,"pdf_convert"),get_safe_basename(pdf_dir))
     mkdirs(out_root)
 
     dirs = [p for p in pdf_dir.iterdir() if p.is_dir()] + [pdf_dir]
     for d in dirs:
-        dest = out_root / d.name
+        dest = safe_join_path(out_root,get_safe_basename(d))
         mkdirs(dest)
         pdf_to_text_in_folders(str(d), str(dest))
 

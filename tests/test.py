@@ -19,19 +19,17 @@ def main(argv=None):
     return _DISPATCH[args.command](args)
 
 
-pdf_path = "/srv/media/thedailydialectics/pdfs/FIOA/41707059074637/41707059074637.pdf"
+pdf_path = "/srv/media/thedailydialectics/pdfs/US-Patents/wipow/US_2007_0200749_A1"
 BASE_URL='https://thedailydialectics.com'
 MEDIA_ROOT='/srv/media/thedailydialectics'
 PDFS_PUBLIC_URL=f"{BASE_URL}/pdfs"
 data = {
-    "pdf_path":pdf_path,
+    "input_path":pdf_path,
     "base_url":BASE_URL,
     "media_root":MEDIA_ROOT,
-    "overwrite":True,
+    "overwrite":False,
     "write":True
     }
-cmd_pdf(**data)
-##
-##input(abstract_scaffold_main(data))
-result = generate_pdf_manifest(**data)
+result = cmd_pipeline(**data)
+
 input(result)

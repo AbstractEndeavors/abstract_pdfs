@@ -5,7 +5,7 @@ def eatSlash(string):
     except Exception as e:
         logger.info(f"{e}")
     return string
-IMAGE_EXTS = list(MIME_TYPES.get('image').keys())
+IMAGE_EXTENSIONS = IMAGE_EXTS = list(MIME_TYPES.get('image').keys())
 PDF_EXTENSION    = ".pdf"
 TEXT_EXTS   = {".txt"}
 PDF_EXTS    = {".pdf"}
@@ -26,4 +26,4 @@ MEDIA_ROOT_DIR = get_env_value("ABSTRACT_MEDIA_SCAFFOLD_MEDIA_ROOT_DIR",path=ENV
 PDFS_ROOT_DIR = get_env_value("ABSTRACT_MEDIA_SCAFFOLD_PDFS_ROOT_DIR",path=ENV_PATH) or f"{MEDIA_ROOT_DIR}/pdfs"
 IMGS_ROOT_DIR = get_env_value("ABSTRACT_MEDIA_SCAFFOLD_IMGS_ROOT_DIR",path=ENV_PATH) or f"{MEDIA_ROOT_DIR}/imgs"
 PAGE_RE     = re.compile(r"page[_\-]?(\d+)", re.IGNORECASE)
-
+SKIP_DIRS=[]

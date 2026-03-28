@@ -5,6 +5,7 @@ from .generators import (
     generate_page_variables,
     generate_pdf_manifest,
 )
+from .generate_htmls import generate_index_html
 def get_dict(obj):
     if not isinstance(obj,dict):
         try:
@@ -112,3 +113,113 @@ def cmd_page(*, section, slug, title, description, thumbnail,
     print(msg)
 
     return 0
+def cmd_pipeline(input_path, *, base_url, media_root, site_root=None,
+                 recurse=True, write=False, overwrite=False, dry_run=False):
+    """
+    Full pipeline: scaffold PDFs → scaffold images → generate index HTML.
+    
+    Runs against a single directory or tree:
+      1. Find and manifest all PDFs
+      2. Find and info.json all images (thumbnails included)
+      3. Generate index.html for galleries and viewers
+    """
+    input_path = os.path.abspath(input_path)
+    pdf_name = os.path.basename(input_path)
+    pdf_basename = f"{pdf_name}.pdf"
+    pdf_path = os.path.join(input_path,pdf_basename)
+    media_root = os.path.abspath(media_root)
+    site_root = (site_root or base_url).rstrip("/")
+
+    if not os.path.isdir(input_path):
+        print(f"ERROR: {input_path} is not a directory", file=sys.stderr)
+        return 1
+
+    results = {"pdfs": 0, "images": 0, "indexes": 0, "errors": 0}
+
+    dirs = [input_path]
+    if recurse:
+        for root, subdirs, _ in os.walk(input_path):
+            subdirs[:] = [d for d in subdirs if d not in SKIP_DIRS and not d.startswith(".")]
+            for d in subdirs:
+                dirs.append(os.path.join(root, d))
+
+    # ── 1. PDFs ──────────────────────────────────────────────────
+    for d in dirs:
+        for f in os.listdir(d):
+            if not f.lower().endswith(".pdf"):
+                continue
+            pdf_path = os.path.join(d, f)
+            if not os.path.isfile(pdf_path):
+                continue
+            try:
+                stem = os.path.splitext(f)[0]
+                print(f"\n[pdf] {pdf_path}")
+                entries = generate_pdf_manifest(
+                    pdf_path, base_url=base_url, media_root=media_root,
+                    write=write, overwrite=overwrite
+                )
+                if write:
+                    out = os.path.join(d, f"{stem}_manifest.json")
+                    write_json(out, [get_dict(e) for e in entries],
+                               dry_run=not write, overwrite=overwrite)
+                print(f"  → {len(entries)} pages")
+                results["pdfs"] += 1
+            except Exception as e:
+                print(f"  ERROR: {e}", file=sys.stderr)
+                results["errors"] += 1
+
+    # ── 2. Images ────────────────────────────────────────────────
+    for d in dirs:
+        for f in os.listdir(d):
+            _, ext = os.path.splitext(f)
+            if ext.lower() not in IMAGE_EXTENSIONS:
+                continue
+            img_path = os.path.join(d, f)
+            if not os.path.isfile(img_path):
+                continue
+            info_path = os.path.join(d, "info.json")
+            if os.path.exists(info_path) and not overwrite:
+                continue
+            try:
+                info = generate_image_info(img_path, info_path, base_url=base_url, media_root=media_root)
+                if write:
+                    existing = safe_load_from_json(info_path) if os.path.exists(info_path) else {}
+                    merged, changed = fill_nulls(existing, get_dict(info))
+                    if changed or not os.path.exists(info_path):
+                        safe_dump_to_json(file_path=info_path, data=merged)
+                        print(f"[img] wrote {info_path}")
+                    else:
+                        print(f"[img] unchanged {info_path}")
+                else:
+                    print(f"[img] dry-run {info_path}")
+                results["images"] += 1
+            except Exception as e:
+                print(f"  ERROR {img_path}: {e}", file=sys.stderr)
+                results["errors"] += 1
+
+    # ── 3. Index HTML ────────────────────────────────────────────
+   
+##    try:
+    generate_index_html(
+        input_path,
+        base_url=base_url,
+        media_root=media_root,
+        site_root=site_root,
+        recurse=recurse,
+        dry_run=dry_run if not write else False,
+        pdf_path=pdf_path
+    )
+    results["indexes"] += 1
+##    except Exception as e:
+##        print(f"  ERROR generating indexes: {e}", file=sys.stderr)
+##        results["errors"] += 1
+
+    # ── Summary ──────────────────────────────────────────────────
+    print(f"\n{'─' * 40}")
+    print(f"Pipeline complete:")
+    print(f"  PDFs manifested:  {results['pdfs']}")
+    print(f"  Images processed: {results['images']}")
+    print(f"  Indexes written:  {results['indexes']}")
+    if results["errors"]:
+        print(f"  Errors:           {results['errors']}")
+    return 0 if results["errors"] == 0 else 1

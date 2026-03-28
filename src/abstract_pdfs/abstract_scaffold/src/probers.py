@@ -5,6 +5,7 @@ from .imports import *
 
 def probe_image(path: Path) -> tuple[int, int, float]:
     """Return (width, height, file_size_mb). Falls back to (0, 0, size) if no PIL."""
+    path = get_pathlib_path(path)
     size_mb = round(path.stat().st_size / 1_048_576, 3)
     if not HAS_PIL:
         return 0, 0, size_mb
@@ -16,9 +17,9 @@ def probe_image(path: Path) -> tuple[int, int, float]:
         return 0, 0, size_mb
 
 
-def slug_from_path(path: Path) -> str:
+def slug_from_path(path: str) -> str:
     """Convert a filename to a URL-friendly slug."""
-    name = path.stem
+    name = get_safe_filename(path)
     name = re.sub(r'[^a-zA-Z0-9\-_]', '-', name)
     name = re.sub(r'-+', '-', name).strip('-').lower()
     return name

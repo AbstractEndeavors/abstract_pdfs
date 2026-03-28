@@ -57,7 +57,7 @@ class AbstractPDFManager:
                 images = convert_from_path(pdf_page)
                 if not images:
                     continue
-                out_path = os.path.join(images_dir, Path(pdf_page).stem + ".png")
+                out_path = os.path.join(images_dir, get_safe_basename(pdf_page) + ".png")
                 images[0].save(out_path, "PNG")
                 img_paths.append(out_path)
             except Exception as e:
@@ -78,7 +78,7 @@ class AbstractPDFManager:
         for img in img_paths:
             try:
                 txt = image_to_text(img)
-                txt_path = os.path.join(text_dir, Path(img).stem + ".txt")
+                txt_path = os.path.join(text_dir, get_safe_basename(img) + ".txt")
                 write_to_file(txt_path, txt)
                 extracted.append(txt_path)
             except Exception as e:
