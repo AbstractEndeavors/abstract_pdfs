@@ -1,3 +1,16 @@
+## Part of the Abstract Media Intelligence Platform
+
+This module is part of a unified system for transforming raw media into structured, searchable, and SEO-optimized data.
+
+abstract_pdfs handles document ingestion and publishing:
+- PDF → structured pages (text + images)
+- metadata + manifest generation
+- static HTML output (viewer + gallery)
+
+Full system: https://github.com/AbstractEndeavors/abstract-media-intelligence
+
+---
+
 ## **abstract_pdfs — Document Processing & SEO Pipeline for PDF-Based Content**
 
 A structured pipeline for transforming PDFs into **searchable, metadata-rich, web-ready content**, combining OCR, page-level analysis, metadata generation, and static site scaffolding.
