@@ -1,9 +1,3 @@
----
-
-# 🔹 🔧 REWRITTEN README (ABSTRACT_PDFS — SYSTEM LEVEL)
-
----
-
 ## **abstract_pdfs — Document Processing & SEO Pipeline for PDF-Based Content**
 
 A structured pipeline for transforming PDFs into **searchable, metadata-rich, web-ready content**, combining OCR, page-level analysis, metadata generation, and static site scaffolding.
