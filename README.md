@@ -61,7 +61,21 @@ HTML Generation
     ↓
 Static Site Output (SEO-ready)
 ```
+```mermaid
+flowchart TD
+    A[PDF Input]
+    B[DocumentPipeline]
+    C[SliceManager\nPage Images + Text + OCR]
+    D[Per-Page Assets\nThumbnails / Text / Info JSON]
+    E[Manifest Generation\nPage + Document Metadata]
+    F[NLP Enrichment\nSummaries + Keywords + Descriptions]
+    G[HTML Generation\nViewer Pages + Gallery Indexes]
+    H[Static Output\nSearchable / SEO-ready PDF Corpus]
 
+    A --> B --> C --> D --> E --> F --> G --> H
+
+
+```
 ---
 
 ## 🔹 Core Capabilities
