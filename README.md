@@ -1,4 +1,4 @@
-## Part of the Abstract Media Intelligence Platform
+## Part of the Abstract Intelligence Platform
 
 This module is part of a unified system for transforming raw media into structured, searchable, and SEO-optimized data.
 
@@ -7,7 +7,7 @@ abstract_pdfs handles document ingestion and publishing:
 - metadata + manifest generation
 - static HTML output (viewer + gallery)
 
-Full system: https://github.com/AbstractEndeavors/abstract-media-intelligence
+Full system: https://github.com/AbstractEndeavors/abstract-intelligence
 
 ---
 
